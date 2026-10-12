@@ -1,0 +1,2 @@
+#!/bin/zsh
+exec /Applications/Ghostty.app/Contents/MacOS/ghostty --config-file="$HOME/.config/ghostty/herdr-devbox-launch.conf"
