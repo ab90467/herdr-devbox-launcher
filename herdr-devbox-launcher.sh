@@ -35,44 +35,6 @@ echo "${C_BOLD}${C_CYAN}│${TITLE}│${C_RESET}"
 echo "${C_BOLD}${C_CYAN}└${BORDER}┘${C_RESET}"
 echo ""
 
-step "herdr"
-if ! command -v herdr >/dev/null 2>&1; then
-  info "ikke installert, installerer via Homebrew..."
-  if brew install herdr >/dev/null 2>&1; then
-    ok "installert ($(herdr --version 2>&1 | awk '{print $2}'))"
-  else
-    bad "installasjon feilet"
-    fail_and_exit
-  fi
-else
-  ok "installert ($(herdr --version 2>&1 | awk '{print $2}'))"
-fi
-
-BREW_CACHE="$HOME/.cache/herdr-devbox-launcher/last-brew-update"
-mkdir -p "$(dirname "$BREW_CACHE")"
-NOW=$(date +%s)
-LAST=$(cat "$BREW_CACHE" 2>/dev/null || echo 0)
-AGE=$(( NOW - LAST ))
-if (( AGE > 3600 )); then
-  info "sjekker Homebrew-indeks..."
-  brew update --quiet >/dev/null 2>&1
-  echo "$NOW" > "$BREW_CACHE"
-else
-  info "Homebrew-indeks sjekket for $(( AGE / 60 )) min siden, hopper over"
-fi
-if brew outdated herdr 2>/dev/null | grep -q herdr; then
-  info "ny versjon tilgjengelig, oppgraderer..."
-  if brew upgrade herdr >/dev/null 2>&1; then
-    ok "oppgradert til $(herdr --version 2>&1 | awk '{print $2}')"
-  else
-    bad "oppgradering feilet"
-    fail_and_exit
-  fi
-else
-  ok "siste versjon ($(herdr --version 2>&1 | awk '{print $2}'))"
-fi
-echo ""
-
 step "tailscale"
 if ! command -v tailscale >/dev/null 2>&1; then
   bad "ikke installert — kjør: brew install tailscale"
@@ -105,6 +67,44 @@ rm -f "$PING_FILE"
 
 if (( PING_OK )); then
   ok "svarer"
+  echo ""
+
+  step "herdr"
+  if ! command -v herdr >/dev/null 2>&1; then
+    info "ikke installert, installerer via Homebrew..."
+    if brew install herdr >/dev/null 2>&1; then
+      ok "installert ($(herdr --version 2>&1 | awk '{print $2}'))"
+    else
+      bad "installasjon feilet"
+      fail_and_exit
+    fi
+  else
+    ok "installert ($(herdr --version 2>&1 | awk '{print $2}'))"
+  fi
+
+  BREW_CACHE="$HOME/.cache/herdr-devbox-launcher/last-brew-update"
+  mkdir -p "$(dirname "$BREW_CACHE")"
+  NOW=$(date +%s)
+  LAST=$(cat "$BREW_CACHE" 2>/dev/null || echo 0)
+  AGE=$(( NOW - LAST ))
+  if (( AGE > 3600 )); then
+    info "sjekker Homebrew-indeks..."
+    brew update --quiet >/dev/null 2>&1
+    echo "$NOW" > "$BREW_CACHE"
+  else
+    info "Homebrew-indeks sjekket for $(( AGE / 60 )) min siden, hopper over"
+  fi
+  if brew outdated herdr 2>/dev/null | grep -q herdr; then
+    info "ny versjon tilgjengelig, oppgraderer..."
+    if brew upgrade herdr >/dev/null 2>&1; then
+      ok "oppgradert til $(herdr --version 2>&1 | awk '{print $2}')"
+    else
+      bad "oppgradering feilet"
+      fail_and_exit
+    fi
+  else
+    ok "siste versjon ($(herdr --version 2>&1 | awk '{print $2}'))"
+  fi
   echo ""
 
   step "Claude Tools"
