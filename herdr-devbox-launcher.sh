@@ -72,10 +72,13 @@ if (( PING_OK )); then
   step "herdr"
   if ! command -v herdr >/dev/null 2>&1; then
     info "ikke installert, installerer via Homebrew..."
-    if brew install herdr >/dev/null 2>&1; then
+    if BREW_OUT=$(brew install herdr 2>&1); then
       ok "installert ($(herdr --version 2>&1 | awk '{print $2}'))"
     else
       bad "installasjon feilet"
+      echo ""
+      echo "${C_DIM}--- brew install herdr ---${C_RESET}"
+      echo "$BREW_OUT"
       fail_and_exit
     fi
   else
@@ -96,10 +99,13 @@ if (( PING_OK )); then
   fi
   if brew outdated herdr 2>/dev/null | grep -q herdr; then
     info "ny versjon tilgjengelig, oppgraderer..."
-    if brew upgrade herdr >/dev/null 2>&1; then
+    if BREW_OUT=$(brew upgrade herdr 2>&1); then
       ok "oppgradert til $(herdr --version 2>&1 | awk '{print $2}')"
     else
       bad "oppgradering feilet"
+      echo ""
+      echo "${C_DIM}--- brew upgrade herdr ---${C_RESET}"
+      echo "$BREW_OUT"
       fail_and_exit
     fi
   else
