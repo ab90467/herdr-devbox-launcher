@@ -1,10 +1,9 @@
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 SIZE = 1024
-img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+SS = 4  # supersample factor for a clean anti-aliased rounded-rect edge
+BIG = SIZE * SS
 
-# Hot, high-energy diagonal gradient: magenta -> orange -> yellow.
-# Far more eye-catching in a Dock full of cool-toned/muted icons.
 stops = [
     (0.00, (236, 18, 139)),   # magenta
     (0.55, (255, 94, 0)),     # orange
@@ -40,24 +39,18 @@ for y in range(SIZE):
         pixels[o + 2] = b
 
 grad = Image.frombytes("RGB", (SIZE, SIZE), bytes(pixels))
+img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
 img.paste(grad, (0, 0))
 
-radius = int(SIZE * 0.1763)
-mask = Image.new("L", (SIZE, SIZE), 0)
-mdraw = ImageDraw.Draw(mask)
-mdraw.rounded_rectangle([0, 0, SIZE - 1, SIZE - 1], radius=radius, fill=255)
+# Supersampled mask: draw the rounded-rect large, then downsize with LANCZOS
+# so the edge is properly anti-aliased — no halo/ring from a hard-edged mask
+# getting resampled later by sips for smaller icon sizes.
+radius_big = int(BIG * 0.1763)
+mask_big = Image.new("L", (BIG, BIG), 0)
+ImageDraw.Draw(mask_big).rounded_rectangle([0, 0, BIG - 1, BIG - 1], radius=radius_big, fill=255)
+mask = mask_big.resize((SIZE, SIZE), Image.LANCZOS)
 img.putalpha(mask)
 
-draw = ImageDraw.Draw(img)
-
-# Depth: dark corner glow + a brighter top-left highlight than before, for more punch.
-glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-gdraw = ImageDraw.Draw(glow)
-gdraw.ellipse([SIZE * 0.55, SIZE * 0.55, SIZE * 1.3, SIZE * 1.3], fill=(0, 0, 0, 70))
-gdraw.ellipse([-SIZE * 0.3, -SIZE * 0.3, SIZE * 0.5, SIZE * 0.5], fill=(255, 255, 255, 55))
-glow = glow.filter(ImageFilter.GaussianBlur(SIZE * 0.08))
-glow.putalpha(Image.composite(glow.split()[3], Image.new("L", (SIZE, SIZE), 0), mask))
-img = Image.alpha_composite(img, glow)
 draw = ImageDraw.Draw(img)
 
 shadow_offset = 10
@@ -91,8 +84,6 @@ draw.rounded_rectangle(
     radius=sr, fill=(255, 255, 255, 255),
 )
 
-# Remote-signal glyph: bright cyan reads as a cool, high-contrast pop against
-# the hot magenta/orange/yellow background (amber would have blended in).
 cx, cy = 820, 225
 cyan = (0, 229, 255, 255)
 cyan_shadow = (0, 0, 0, 80)
