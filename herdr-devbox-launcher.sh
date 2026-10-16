@@ -130,7 +130,7 @@ if (( PING_OK )); then
 
   echo "${C_GREEN}${C_BOLD}→ Kobler til (sesjon: ${SESSION})...${C_RESET}"
   sleep 0.3
-  herdr --remote "$DEVBOX" --session "$SESSION"
+  herdr --remote "$DEVBOX" --session "$SESSION" --remote-keybindings server --handoff
   HERDR_STATUS=$?
   if (( HERDR_STATUS != 0 )); then
     echo ""
