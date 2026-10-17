@@ -90,7 +90,7 @@ if (( PING_OK )); then
   NOW=$(date +%s)
   LAST=$(cat "$BREW_CACHE" 2>/dev/null || echo 0)
   AGE=$(( NOW - LAST ))
-  if (( AGE > 3600 )); then
+  if (( AGE > 43200 )); then
     info "sjekker Homebrew-indeks..."
     brew update --quiet >/dev/null 2>&1
     echo "$NOW" > "$BREW_CACHE"
