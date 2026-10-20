@@ -10,6 +10,25 @@ C_CYAN=$'\033[36m'
 C_GREEN=$'\033[32m'
 C_RED=$'\033[31m'
 
+# Same magenta→orange→yellow gradient as the Dock icon, one stop per letter.
+C_H=$'\033[38;2;236;18;139m'
+C_E=$'\033[38;2;245;53;76m'
+C_R1=$'\033[38;2;253;87;13m'
+C_D=$'\033[38;2;255;144;0m'
+C_R2=$'\033[38;2;255;206;0m'
+
+splash() {
+  echo ""
+  echo "  ${C_H}█   █${C_RESET} ${C_E}█████${C_RESET} ${C_R1}████ ${C_RESET} ${C_D}████ ${C_RESET} ${C_R2}████ ${C_RESET}"
+  echo "  ${C_H}█   █${C_RESET} ${C_E}█    ${C_RESET} ${C_R1}█   █${C_RESET} ${C_D}█   █${C_RESET} ${C_R2}█   █${C_RESET}"
+  echo "  ${C_H}█████${C_RESET} ${C_E}████ ${C_RESET} ${C_R1}████ ${C_RESET} ${C_D}█   █${C_RESET} ${C_R2}████ ${C_RESET}"
+  echo "  ${C_H}█   █${C_RESET} ${C_E}█    ${C_RESET} ${C_R1}█  █ ${C_RESET} ${C_D}█   █${C_RESET} ${C_R2}█  █ ${C_RESET}"
+  echo "  ${C_H}█   █${C_RESET} ${C_E}█████${C_RESET} ${C_R1}█   █${C_RESET} ${C_D}████ ${C_RESET} ${C_R2}█   █${C_RESET}"
+  echo ""
+  echo "  ${C_DIM}⚡ kobler til${C_RESET} ${C_BOLD}${DEVBOX}${C_RESET}${C_DIM} …${C_RESET}"
+  echo ""
+}
+
 ok()   { echo "  ${C_GREEN}✓${C_RESET} $1" }
 bad()  { echo "  ${C_RED}✗${C_RESET} $1" }
 info() { echo "  ${C_DIM}·${C_RESET} $1" }
@@ -28,12 +47,7 @@ fail_and_exit() {
 
 while true; do
 clear
-TITLE="  herdr → ${DEVBOX}  "
-BORDER=${(l:${#TITLE}::─:)}
-echo "${C_BOLD}${C_CYAN}┌${BORDER}┐${C_RESET}"
-echo "${C_BOLD}${C_CYAN}│${TITLE}│${C_RESET}"
-echo "${C_BOLD}${C_CYAN}└${BORDER}┘${C_RESET}"
-echo ""
+splash
 
 step "tailscale"
 if ! command -v tailscale >/dev/null 2>&1; then
