@@ -10,22 +10,35 @@ C_CYAN=$'\033[36m'
 C_GREEN=$'\033[32m'
 C_RED=$'\033[31m'
 
-# Same magenta→orange→yellow gradient as the Dock icon, one stop per letter.
-C_H=$'\033[38;2;236;18;139m'
-C_E=$'\033[38;2;245;53;76m'
-C_R1=$'\033[38;2;253;87;13m'
-C_D=$'\033[38;2;255;144;0m'
-C_R2=$'\033[38;2;255;206;0m'
+# Warm purple→red→orange gradient, one stop per letter.
+C_S=$'\033[38;2;139;29;130m'
+C_O=$'\033[38;2;170;20;95m'
+C_P=$'\033[38;2;207;2;43m'
+C_R=$'\033[38;2;225;60;20m'
+C_A=$'\033[38;2;240;125;0m'
 
 splash() {
+  local cols pad_art pad_status status_text
+  cols=$(tput cols 2>/dev/null || echo 80)
+
+  # art is 5 letters * 5 cols + 4 separating spaces = 29 chars wide.
+  pad_art=$(( (cols - 29) / 2 ))
+  (( pad_art < 0 )) && pad_art=0
+  printf -v PAD_ART '%*s' "$pad_art" ""
+
+  status_text="⚡ kobler til ${DEVBOX} …"
+  pad_status=$(( (cols - ${#status_text}) / 2 ))
+  (( pad_status < 0 )) && pad_status=0
+  printf -v PAD_STATUS '%*s' "$pad_status" ""
+
   echo ""
-  echo "  ${C_H}█   █${C_RESET} ${C_E}█████${C_RESET} ${C_R1}████ ${C_RESET} ${C_D}████ ${C_RESET} ${C_R2}████ ${C_RESET}"
-  echo "  ${C_H}█   █${C_RESET} ${C_E}█    ${C_RESET} ${C_R1}█   █${C_RESET} ${C_D}█   █${C_RESET} ${C_R2}█   █${C_RESET}"
-  echo "  ${C_H}█████${C_RESET} ${C_E}████ ${C_RESET} ${C_R1}████ ${C_RESET} ${C_D}█   █${C_RESET} ${C_R2}████ ${C_RESET}"
-  echo "  ${C_H}█   █${C_RESET} ${C_E}█    ${C_RESET} ${C_R1}█  █ ${C_RESET} ${C_D}█   █${C_RESET} ${C_R2}█  █ ${C_RESET}"
-  echo "  ${C_H}█   █${C_RESET} ${C_E}█████${C_RESET} ${C_R1}█   █${C_RESET} ${C_D}████ ${C_RESET} ${C_R2}█   █${C_RESET}"
+  echo "${PAD_ART}${C_S} ████${C_RESET} ${C_O} ███ ${C_RESET} ${C_P}████ ${C_RESET} ${C_R}████ ${C_RESET} ${C_A} ███ ${C_RESET}"
+  echo "${PAD_ART}${C_S}█    ${C_RESET} ${C_O}█   █${C_RESET} ${C_P}█   █${C_RESET} ${C_R}█   █${C_RESET} ${C_A}█   █${C_RESET}"
+  echo "${PAD_ART}${C_S} ███ ${C_RESET} ${C_O}█   █${C_RESET} ${C_P}████ ${C_RESET} ${C_R}████ ${C_RESET} ${C_A}█████${C_RESET}"
+  echo "${PAD_ART}${C_S}    █${C_RESET} ${C_O}█   █${C_RESET} ${C_P}█    ${C_RESET} ${C_R}█  █ ${C_RESET} ${C_A}█   █${C_RESET}"
+  echo "${PAD_ART}${C_S}████ ${C_RESET} ${C_O} ███ ${C_RESET} ${C_P}█    ${C_RESET} ${C_R}█   █${C_RESET} ${C_A}█   █${C_RESET}"
   echo ""
-  echo "  ${C_DIM}⚡ kobler til${C_RESET} ${C_BOLD}${DEVBOX}${C_RESET}${C_DIM} …${C_RESET}"
+  echo "${PAD_STATUS}${C_DIM}⚡ kobler til${C_RESET} ${C_BOLD}${DEVBOX}${C_RESET}${C_DIM} …${C_RESET}"
   echo ""
 }
 

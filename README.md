@@ -51,3 +51,18 @@ Automator's generated binary stub is just as replaceable with a one-liner
 `exec`, and keeping it as a plain text file means the whole app is
 reproducible from source in this repo — no compiled artifact to lose track
 of.
+
+## Troubleshooting
+
+**Splash hangs right after "herdr installert (...)"** — this is the
+`brew outdated herdr` network call stalling, not a script bug. Close the
+window and relaunch; it has resolved itself every time this has been
+observed.
+
+**"Can't type" in the window** — before suspecting herdr/the connection,
+check window focus. The Dock app and a plain `ghostty` window share the
+same app bundle/identity, so macOS Accessibility (`osascript ... set
+frontmost of process ...`) cannot reliably force focus onto one over the
+other — it can silently fail or get reclaimed by whichever window spawned
+the script. Click directly on the Herdr Devbox window (or Cmd+Tab to it)
+rather than trying to script the switch.
