@@ -155,6 +155,23 @@ if (( PING_OK )); then
   fi
   echo ""
 
+  step "dev-prosesser"
+  DEV_PROC_OUT=$(ssh -o ConnectTimeout=5 "$DEVBOX" python3 - < "$HOME/.local/bin/herdr-restart-stale-dev.py" 2>&1)
+  if [[ -z "$DEV_PROC_OUT" ]]; then
+    bad "fikk ikke sjekket (ingen svar fra devbox)"
+  else
+    while IFS='|' read -r kind label detail; do
+      case "$kind" in
+        RESTARTED) ok "$label restartet (var $detail)" ;;
+        FRESH)     info "$label kjører fortsatt ($detail), rører den ikke" ;;
+        MISSING)   info "$label: $detail" ;;
+        ERROR)     bad "$label: $detail" ;;
+        *)         info "$kind $label $detail" ;;
+      esac
+    done <<< "$DEV_PROC_OUT"
+  fi
+  echo ""
+
   echo "${C_GREEN}${C_BOLD}→ Kobler til (sesjon: ${SESSION})...${C_RESET}"
   sleep 0.3
   herdr --remote "$DEVBOX" --session "$SESSION" --remote-keybindings server --handoff
