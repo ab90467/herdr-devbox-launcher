@@ -11,6 +11,7 @@ echo "→ Installing launcher script"
 mkdir -p "$HOME/.local/bin"
 cp "$SRC_DIR/herdr-devbox-launcher.sh" "$HOME/.local/bin/herdr-devbox-launcher.sh"
 chmod +x "$HOME/.local/bin/herdr-devbox-launcher.sh"
+cp "$SRC_DIR/restart-stale-dev.py" "$HOME/.local/bin/herdr-restart-stale-dev.py"
 
 echo "→ Installing Ghostty config"
 mkdir -p "$HOME/.config/ghostty"
