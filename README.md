@@ -30,7 +30,7 @@ just a plain loop, so it can't confuse the terminal's process tracking.
 | Path | What |
 |---|---|
 | `herdr-devbox-launcher.sh` | The actual launcher script. |
-| `restart-stale-dev.py` | Runs on the devbox (piped via ssh into `python3 -`). Finds the `npm start` / `dev-remote.sh` panes by cwd and restarts whichever has been running past the threshold. Paths/commands are hardcoded for this project — edit `TARGETS` if yours differ. |
+| `restart-stale-dev.py` | Runs on the devbox (piped via ssh into `python3 -`). Finds the `npm start` / `dev-remote.sh` panes by cwd and restarts whichever has been running past the threshold. Paths/commands are hardcoded for this project — edit `TARGETS` if yours differ. A `flock` on `/tmp/restart-stale-dev.lock` means a second launcher invocation landing while one is still mid-restart skips instead of racing it on the same pane. |
 | `herdr-devbox-launch.conf` | Ghostty config: runs the launcher as the window's command, locks the window title to "Herdr Devbox" (overrides OSC title escapes), quits Ghostty when the window closes. |
 | `app/HerdrDevbox` | The app bundle's "binary" — just a one-line zsh script invoking Ghostty with the config above. Not a compiled binary. |
 | `app/Info.plist` | App bundle metadata (bundle id, name, icon file). |

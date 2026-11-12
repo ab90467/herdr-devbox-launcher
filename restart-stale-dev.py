@@ -7,11 +7,20 @@
 # those aren't stable across herdr restarts.
 #
 # Prints one "KIND|label|detail" line per target; the caller renders it.
+import fcntl
 import json
 import subprocess
 import time
 
 THRESHOLD_SECONDS = 6 * 3600
+
+# This runs once per launcher startup, on the devbox, against shared panes —
+# with several Macs (or several launches on one) hitting the same devbox,
+# two invocations can land close enough together to both decide the same
+# pane is stale and both send it C-c + a restart, racing each other in the
+# same terminal. A single process-wide lock, held for the whole run, turns
+# that into "whoever gets there first restarts it, the other skips" instead.
+LOCKFILE = "/tmp/restart-stale-dev.lock"
 
 TARGETS = [
     ("npm start", "/home/jov/irma/aam/frontend", "npm start", "npm start"),
@@ -78,6 +87,20 @@ def elapsed_seconds(pid):
 
 
 def main():
+    lock_fd = open(LOCKFILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("SKIPPED|dev-prosesser|en annen restart-stale-dev.py kjorer allerede")
+        return
+    try:
+        _check_and_restart_targets()
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
+def _check_and_restart_targets():
     try:
         panes = herdr("pane", "list")["result"]["panes"]
     except HerdrError as e:
