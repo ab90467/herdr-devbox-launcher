@@ -27,7 +27,7 @@ Når et ekte DevTools-vindu er festet til en fane, henger `Target.getTargets` ov
 
 - svarer på `Target.getTargets` fra HTTP-endepunktet i stedet for å sende det videre,
 - filtrerer ut `devtools://`-mål fra lister og hendelser,
-- kobler til Chrome på nytt hvis oppstrøms-forbindelsen faller.
+- **lukker klienten (WS-kode 1011) hvis forbindelsen til Chrome faller eller fane-ID-en er død**, i stedet for å koble til på nytt i det stille. En ny oppstrøms-WS er en helt ny CDP-forbindelse der klientens `sessionId`-er ikke finnes, og klienten får aldri beskjed. (Tidligere versjon reconnectet stille og ga akkurat det symptomet under.)
 
 Detaljer står i kommentarene øverst i `devbox/bin/cdp-devtools-filter-proxy.py`.
 
@@ -76,14 +76,29 @@ ssh jov@devbox-jov-ne 'curl -s -m5 -o /dev/null -w "%{http_code}\n" http://127.0
 |---|---|---|
 | `curl 127.0.0.1:9229` → connection refused | Proxyen kjører ikke (f.eks. etter reboot uten linger) | `systemctl --user start cdp-devtools-filter-proxy`; vurder `enable-linger` |
 | 9222 virker, 9229 ikke | Samme som over – 9222 er bare tunnelen | Som over |
-| `list_pages` virker, men `new_page` / `navigate_page` / skjermbilde henger | Gammel WS-forbindelse i MCP-prosessen etter at proxyen ble restartet. Helsesjekken i supervisoren tester bare HTTP, så den oppdager det ikke. *(Hypotese, ikke bekreftet mot en konkret prosess.)* | `/mcp` → reconnect i Claude Code-sesjonen |
-| Kall mot en fane henger i det uendelige | Fane-ID-en finnes ikke lenger. Proxyen prøver å koble til på nytt hvert sekund og gir aldri en feil (`handle_client`). Direkte mot Chrome gir 404. | `list_pages` på nytt for ferske ID-er. Koden er ikke endret. |
+| `list_pages` virker, men `new_page` / `navigate_page` / skjermbilde henger, eller «Session closed» på en fane | Oppstrøms-WS til Chrome falt (typisk når **Mac-en gikk i dvale** og tunnelen frøs), og klienten satt igjen med døde CDP-sesjoner. `list_pages` virker fordi den svares fra HTTP. Proxyen lukker nå klienten (1011) ved brudd; hos en MCP-prosess som er startet før fiksen eller ikke tar opp en ny sesjon selv, gjelder fortsatt: | `/mcp` → reconnect i Claude Code-sesjonen, og kall `list_pages` på nytt for ferske fane-ID-er |
+| Kall mot en fane gir feil umiddelbart | Fane-ID-en finnes ikke lenger (Chrome svarer HTTP 500 på WS-oppgraderingen). Proxyen lukker nå klienten med 1011 på ~0,1 s i stedet for å henge. | `list_pages` på nytt |
 | Lesing virker, men fanen «endrer seg ikke» | Fanen er skjult (`document.visibilityState == "hidden"`); Chrome throttler skjulte faner | Hent fanen frem først (`select_page`) |
 | `ssh … Address already in use` for 8000/3332/8080/13000 | `LocalForward` i `~/.ssh/config` kolliderer med herdr-sesjonen | Ufarlig; bruk `-o ClearAllForwardings=yes` ved enkeltkommandoer |
 
+## Mac-dvale (verifisert årsak til brudd)
+
+2026-11-13: proxy-loggen viste `ConnectionClosedError` kl. 21:38:40 CET, `keepalive ping timeout` og `upstream connect failed` hvert 11. s til 21:41:42. `pmset -g log` viste Idle Sleep 21:38:45 og Wake 21:41:17 (på batteri). Chrome og tunnelen var altså frosset mens Mac-en sov.
+
+Forebygging: `caffeinate -i` på Mac-en mens du jobber mot devboxen, eller skru av dvale på batteri. Etter at Mac-en har sovet må en gammel MCP-sesjon kobles til på nytt (`/mcp`).
+
+## Test av proxyens bruddoppførsel
+
+Start en TCP-relé mellom proxyen og Chrome, koble en klient til proxyen, drep releet, og sjekk at klienten lukkes med 1011 (ikke henger):
+
+```bash
+CDP_UPSTREAM_PORT=9239 CDP_HTTP_PORT=9249 CDP_WS_PORT=9248 python cdp-devtools-filter-proxy.py   # relé: 9239 -> 9222
+```
+
+Kjørt 2026-11-13: klient lukket etter 0,01 s med `code=1011 reason='upstream dropped'`.
+
 ## Kjente svakheter
 
-- Proxyen avviser ikke kommandoer til ukjente fane-ID-er; de henger.
-- Supervisor-helsesjekken er kun HTTP, ikke WS.
+- Supervisor-helsesjekken er kun HTTP, ikke WS; den dreper aldri en MCP-prosess med død WS. Om `chrome-devtools-mcp` tar opp en ny sesjon av seg selv etter 1011 er ikke testet mot en ekte MCP-sesjon.
 - Proxyen og MCP-en har ingen felles autostart-rekkefølge; MCP-en feiler hvis den starter før proxyen.
 - Reverse-tunnelen på Mac-en er ikke dokumentert her: det er ikke undersøkt hva som starter og gjenoppretter den.

@@ -15,8 +15,9 @@
 #     whatever is making the live WS command hang
 #   - filters devtools://... targets out of every list/event, so
 #     automation never sees (or tries to act on) a real inspector window
-#   - reconnects its upstream link to Chrome transparently if that link
-#     drops, instead of tearing down the client's session
+#   - closes the client (1011) if its upstream link to Chrome drops or a
+#     target id is stale, instead of reconnecting silently -- CDP sessions
+#     do not survive a new upstream connection (see handle_client)
 #
 # Usage: point chrome-devtools-mcp at this instead of the real Chrome:
 #   # before
@@ -166,38 +167,40 @@ async def pump_client_to_upstream(client, upstream):
             return
 
 async def handle_client(client):
-    # Chrome has been observed to reset the proxy's upstream socket
-    # independently of the client. A hard failure here must not take the
-    # client's session down with it -- reconnect upstream transparently
-    # and keep serving the same client, instead of forcing
-    # chrome-devtools-mcp to redo its whole handshake.
+    # A new upstream WebSocket is a brand-new CDP connection: sessionIds the
+    # client got from the old one (Target.attachToTarget, flatten) do not
+    # exist on it, and the client is never told. Silently reconnecting
+    # upstream therefore leaves the client holding dead sessions -- its
+    # commands hang or fail with "Session closed" while /json/list (and the
+    # intercepted Target.getTargets) keep working. Seen after the Mac went to
+    # sleep and the SSH tunnel stalled. So: never reconnect on behalf of a
+    # client. If upstream cannot be reached or drops, close the client with
+    # 1011 so it sees the disconnect and redoes its handshake. The same
+    # applies to a stale target id (Chrome answers 404): fail fast instead of
+    # retrying forever.
     path = client.request.path
     upstream_url = f"ws://{UPSTREAM_HOST}:{UPSTREAM_PORT}{path}"
-    while True:
-        try:
-            upstream = await websockets.connect(upstream_url, max_size=None, open_timeout=10)
-        except Exception as e:
-            log(f"upstream connect failed: {e!r}")
-            await asyncio.sleep(1)
-            if client.close_code is not None:
-                return
-            continue
+    try:
+        upstream = await websockets.connect(upstream_url, max_size=None, open_timeout=10)
+    except Exception as e:
+        log(f"upstream connect failed: {e!r} -> closing client")
+        await client.close(code=1011, reason="upstream connect failed")
+        return
 
-        async with upstream:
-            t_up = asyncio.create_task(pump_upstream_to_client(upstream, client))
-            t_down = asyncio.create_task(pump_client_to_upstream(client, upstream))
-            done, pending = await asyncio.wait({t_up, t_down}, return_when=asyncio.FIRST_COMPLETED)
-            for p in pending:
-                p.cancel()
-            for d in done:
-                exc = d.exception()
-                if exc is not None:
-                    log(f"pump ended: {exc!r}")
+    async with upstream:
+        t_up = asyncio.create_task(pump_upstream_to_client(upstream, client))
+        t_down = asyncio.create_task(pump_client_to_upstream(client, upstream))
+        done, pending = await asyncio.wait({t_up, t_down}, return_when=asyncio.FIRST_COMPLETED)
+        for p in pending:
+            p.cancel()
+        for d in done:
+            exc = d.exception()
+            if exc is not None:
+                log(f"pump ended: {exc!r}")
 
-        if client.close_code is not None:
-            return
-        log("upstream dropped, reconnecting (client session kept alive)")
-        await asyncio.sleep(0.3)
+    if client.close_code is None:
+        log("upstream dropped -> closing client so it re-handshakes")
+        await client.close(code=1011, reason="upstream dropped")
 
 async def run_ws():
     async with websockets.serve(handle_client, "127.0.0.1", WS_PORT, max_size=None):
