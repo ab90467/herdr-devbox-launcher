@@ -183,7 +183,19 @@ args=("$@")
 for i in "${!args[@]}"; do
   if [[ "${args[$i]}" == *"@latest" ]]; then
     pkg="${args[$i]%@latest}"
-    resolved="$(npm view "$pkg" version 2>/dev/null || true)"
+    # Bounded: Claude Code gives the MCP server 30s to answer initialize, and
+    # an unbounded `npm view` stalls that long on a registry ETIMEDOUT
+    # (2026-11-13: "/mcp ... connection timed out after 30000ms", no log line).
+    # If the registry doesn't answer in time, fall back to the version in npm's
+    # cache and let the child run cache-first too, instead of hanging on it.
+    resolved="$(timeout 8 npm view "$pkg" version --fetch-retries=0 2>/dev/null || true)"
+    if [[ -z "$resolved" ]]; then
+      resolved="$(timeout 8 npm view "$pkg" version --offline 2>/dev/null || true)"
+      if [[ -n "$resolved" ]]; then
+        log "registry slow/unreachable, using cached $pkg@$resolved"
+        export npm_config_prefer_offline=true
+      fi
+    fi
     if [[ -n "$resolved" ]]; then
       args[$i]="${pkg}@${resolved}"
       log "pinned ${args[$i]} for this supervisor's lifetime"
