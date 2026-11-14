@@ -9,6 +9,7 @@
 # Prints one "KIND|label|detail" line per target; the caller renders it.
 import fcntl
 import json
+import shlex
 import subprocess
 import time
 
@@ -22,9 +23,10 @@ THRESHOLD_SECONDS = 6 * 3600
 # that into "whoever gets there first restarts it, the other skips" instead.
 LOCKFILE = "/tmp/restart-stale-dev.lock"
 
+# (label, pane cwd, foreground cmdline match, restart command, keep k8s namespace)
 TARGETS = [
-    ("npm start", "/home/jov/irma/aam/frontend", "npm start", "npm start"),
-    ("dev-remote.sh", "/home/jov/irma/aam/scripts", "dev-remote.sh", "./dev-remote.sh"),
+    ("npm start", "/home/jov/irma/aam/frontend", "npm start", "npm start", False),
+    ("dev-remote.sh", "/home/jov/irma/aam/scripts", "dev-remote.sh", "./dev-remote.sh", True),
 ]
 
 
@@ -86,6 +88,38 @@ def elapsed_seconds(pid):
     return days * 86400 + hours * 3600 + minutes * 60 + seconds, etime
 
 
+def k8s_target(pid):
+    # dev-remote.sh picks its namespace from NAMESPACE=, else from kubeconfig,
+    # so a bare "./dev-remote.sh" restart can land in a different namespace
+    # than the one it was running against (aam vs aambrann). The running
+    # kubectl port-forward children are the ground truth: read "-n <ns>" (and
+    # "--context <ctx>" when it was set explicitly) from them.
+    out = subprocess.run(
+        ["ps", "-eo", "pid=,ppid=,args="], capture_output=True, text=True,
+    ).stdout
+    children, cmds = {}, {}
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        p, ppid = int(parts[0]), int(parts[1])
+        cmds[p] = parts[2].split()
+        children.setdefault(ppid, []).append(p)
+    stack, seen = [pid], set()
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        argv = cmds.get(cur, [])
+        if argv[:2] == ["kubectl", "port-forward"] and "-n" in argv:
+            ns = argv[argv.index("-n") + 1]
+            ctx = argv[argv.index("--context") + 1] if "--context" in argv else None
+            return ns, ctx
+        stack.extend(children.get(cur, []))
+    return None, None
+
+
 def main():
     lock_fd = open(LOCKFILE, "w")
     try:
@@ -107,7 +141,7 @@ def _check_and_restart_targets():
         print(f"ERROR|dev-prosesser|{e}")
         return
 
-    for label, cwd, match, restart_cmd in TARGETS:
+    for label, cwd, match, restart_cmd, keep_k8s in TARGETS:
         try:
             pane = next((p for p in panes if p.get("cwd") == cwd), None)
             if pane is None:
@@ -127,10 +161,22 @@ def _check_and_restart_targets():
             if secs < THRESHOLD_SECONDS:
                 print(f"FRESH|{label}|{etime}")
                 continue
+            suffix = ""
+            if keep_k8s:
+                # Must be read before Ctrl-C, while the port-forwards still run.
+                ns, ctx = k8s_target(proc["pid"])
+                if ns is None:
+                    print(f"ERROR|{label}|fant ikke namespace fra kjørende port-forwards, restarter ikke")
+                    continue
+                env = f"NAMESPACE={shlex.quote(ns)}"
+                if ctx:
+                    env += f" CONTEXT={shlex.quote(ctx)}"
+                restart_cmd = f"{env} {restart_cmd}"
+                suffix = f", namespace {ns}"
             herdr("pane", "send-keys", pane_id, "C-c")
             time.sleep(1)
             herdr("pane", "run", pane_id, restart_cmd)
-            print(f"RESTARTED|{label}|var {etime}")
+            print(f"RESTARTED|{label}|var {etime}{suffix}")
         except HerdrError as e:
             print(f"ERROR|{label}|{e}")
 

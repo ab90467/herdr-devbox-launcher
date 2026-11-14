@@ -19,6 +19,10 @@ Double-clicking **Herdr Devbox.app** opens a Ghostty window running
 5. Restarts `npm start` / `dev-remote.sh` in their existing herdr panes if
    they've been running for more than 6h (stale kubectl port-forwards and
    a long-lived vite server otherwise just sit there silently rotting).
+   `dev-remote.sh` is restarted against the namespace (and `--context`, if
+   set explicitly) it is *currently* forwarding to, read from its running
+   `kubectl port-forward` children — not from kubeconfig — so `aam` vs
+   `aambrann` survives a restart. If that can't be read, it is not restarted.
 6. Attaches: `herdr --remote <devbox> --session <session>`.
 
 On any failure it prints what went wrong and offers `r` to retry (loops
@@ -30,7 +34,7 @@ just a plain loop, so it can't confuse the terminal's process tracking.
 | Path | What |
 |---|---|
 | `herdr-devbox-launcher.sh` | The actual launcher script. |
-| `restart-stale-dev.py` | Runs on the devbox (piped via ssh into `python3 -`). Finds the `npm start` / `dev-remote.sh` panes by cwd and restarts whichever has been running past the threshold. Paths/commands are hardcoded for this project — edit `TARGETS` if yours differ. A `flock` on `/tmp/restart-stale-dev.lock` means a second launcher invocation landing while one is still mid-restart skips instead of racing it on the same pane. |
+| `restart-stale-dev.py` | Runs on the devbox (piped via ssh into `python3 -`). Finds the `npm start` / `dev-remote.sh` panes by cwd and restarts whichever has been running past the threshold. Paths/commands are hardcoded for this project — edit `TARGETS` if yours differ (last field = keep the k8s namespace on restart). A `flock` on `/tmp/restart-stale-dev.lock` means a second launcher invocation landing while one is still mid-restart skips instead of racing it on the same pane. |
 | `herdr-devbox-launch.conf` | Ghostty config: runs the launcher as the window's command, locks the window title to "Herdr Devbox" (overrides OSC title escapes), quits Ghostty when the window closes. |
 | `app/HerdrDevbox` | The app bundle's "binary" — just a one-line zsh script invoking Ghostty with the config above. Not a compiled binary. |
 | `app/Info.plist` | App bundle metadata (bundle id, name, icon file). |
