@@ -1,0 +1,12 @@
+[Unit]
+Description=CDP devtools filter proxy (9229 HTTP / 9228 WS -> Chrome 9222)
+
+[Service]
+ExecStart=%h/.local/share/cdp-proxy/venv/bin/python %h/.local/bin/cdp-devtools-filter-proxy.py
+Restart=always
+RestartSec=3
+StandardOutput=append:%h/.local/state/cdp-proxy/proxy.log
+StandardError=append:%h/.local/state/cdp-proxy/proxy.log
+
+[Install]
+WantedBy=default.target
