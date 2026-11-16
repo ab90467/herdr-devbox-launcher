@@ -23,7 +23,11 @@ Double-clicking **Herdr Devbox.app** opens a Ghostty window running
    set explicitly) it is *currently* forwarding to, read from its running
    `kubectl port-forward` children — not from kubeconfig — so `aam` vs
    `aambrann` survives a restart. If that can't be read, it is not restarted.
-6. Attaches: `herdr --remote <devbox> --session <session>`.
+6. Keeps the Mac awake with `caffeinate -i -t 32400 -w $$` (idle sleep only,
+   max 9h, released as soon as the launcher/window exits). The SSH tunnels and
+   the Chrome bridge die when the Mac sleeps; locking the screen is fine, a
+   closed lid still sleeps it.
+7. Attaches: `herdr --remote <devbox> --session <session>`.
 
 On any failure it prints what went wrong and offers `r` to retry (loops
 back to step 1) or any other key to close — no `exec`/process replacement,

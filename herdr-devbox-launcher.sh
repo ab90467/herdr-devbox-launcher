@@ -172,6 +172,19 @@ if (( PING_OK )); then
   fi
   echo ""
 
+  # Hold Macen våken (idle-søvn) mens dette vinduet er åpent, maks 9 t: Chrome-
+  # broen og SSH-tunnelene dør når Macen sover. -w følger denne prosessen, så
+  # sperren forsvinner av seg selv når launcheren avslutter; -t er et tak så
+  # Macen ikke holdes våken i dagevis av et glemt vindu. Lokk lukket sover den
+  # uansett. CAFFEINATE_PID hindrer at retry-løkken starter flere.
+  step "mac-søvn"
+  if [[ -z "${CAFFEINATE_PID:-}" ]]; then
+    caffeinate -i -t 32400 -w $$ &!
+    CAFFEINATE_PID=$!
+  fi
+  ok "Mac holdes våken i opptil 9 t mens dette vinduet er åpent"
+  echo ""
+
   echo "${C_GREEN}${C_BOLD}→ Kobler til (sesjon: ${SESSION})...${C_RESET}"
   sleep 0.3
   herdr --remote "$DEVBOX" --session "$SESSION" --remote-keybindings server --handoff
