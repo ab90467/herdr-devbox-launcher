@@ -29,6 +29,12 @@ On any failure it prints what went wrong and offers `r` to retry (loops
 back to step 1) or any other key to close — no `exec`/process replacement,
 just a plain loop, so it can't confuse the terminal's process tracking.
 
+## Related: Chrome bridge
+
+`chrome-bridge/` holds the setup that lets chrome-devtools-MCP on the devbox
+drive Chrome on the Mac (SSH reverse tunnel → CDP filter proxy → MCP). It is a
+separate concern from the launcher; see [`chrome-bridge/README.md`](chrome-bridge/README.md).
+
 ## Layout
 
 | Path | What |
