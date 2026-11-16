@@ -178,10 +178,19 @@ async def handle_client(client):
     # 1011 so it sees the disconnect and redoes its handshake. The same
     # applies to a stale target id (Chrome answers 404): fail fast instead of
     # retrying forever.
+    #
+    # The upstream keepalive is deliberately lenient (ping every 20s, give up
+    # after 60s instead of the library's 20s): Chrome on a busy Mac sometimes
+    # stalls well past 20s without being dead (2026-11-16: drops with the Mac
+    # awake and 1.4 GB renderers / GPU at 35%), and every drop costs the client
+    # its whole session. A real outage still closes the client, just later.
     path = client.request.path
     upstream_url = f"ws://{UPSTREAM_HOST}:{UPSTREAM_PORT}{path}"
     try:
-        upstream = await websockets.connect(upstream_url, max_size=None, open_timeout=10)
+        upstream = await websockets.connect(
+            upstream_url, max_size=None, open_timeout=10,
+            ping_interval=20, ping_timeout=60,
+        )
     except Exception as e:
         log(f"upstream connect failed: {e!r} -> closing client")
         await client.close(code=1011, reason="upstream connect failed")

@@ -28,6 +28,7 @@ Når et ekte DevTools-vindu er festet til en fane, henger `Target.getTargets` ov
 - svarer på `Target.getTargets` fra HTTP-endepunktet i stedet for å sende det videre,
 - filtrerer ut `devtools://`-mål fra lister og hendelser,
 - **lukker klienten (WS-kode 1011) hvis forbindelsen til Chrome faller eller fane-ID-en er død**, i stedet for å koble til på nytt i det stille. En ny oppstrøms-WS er en helt ny CDP-forbindelse der klientens `sessionId`-er ikke finnes, og klienten får aldri beskjed. (Tidligere versjon reconnectet stille og ga akkurat det symptomet under.)
+- bruker en **mild keepalive mot Chrome: ping hvert 20. s, gir opp etter 60 s** (biblioteket har 20 s som standard). Chrome på en travel Mac kan stoppe lenger enn 20 s uten å være død (2026-11-16: brudd med Mac-en våken, 1,4 GB-renderere og GPU på 35 %), og hvert brudd koster klienten hele sesjonen. Testet med et relé som ble frosset i 50 s: 20 s-versjonen lukket klienten (1011), 60 s-versjonen beholdt den og svarte etterpå. Et reelt avbrudd lukker fortsatt klienten, bare senere.
 
 Detaljer står i kommentarene øverst i `devbox/bin/cdp-devtools-filter-proxy.py`.
 
