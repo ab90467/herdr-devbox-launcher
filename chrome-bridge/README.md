@@ -1,6 +1,6 @@
 # devbox-chrome-bridge
 
-Lar `chrome-devtools-mcp` på devboxen (`devbox-jov-ne`) styre Chrome på Mac-en.
+Lar `chrome-devtools-mcp` på devboxen (`<devbox-host>`) styre Chrome på Mac-en.
 
 ## Arkitektur
 
@@ -15,7 +15,7 @@ Mac: Chrome :9222
 | Ledd | Hvor | Port | Hva |
 |---|---|---|---|
 | Chrome | Mac | 9222 | Startet med `--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir="$HOME/Library/Application Support/chrome-mcp"` |
-| Reverse-tunnel | Mac → devbox | 9222 | `ssh -N -T -R 9222:127.0.0.1:9222 jov@devbox-jov-ne` |
+| Reverse-tunnel | Mac → devbox | 9222 | `ssh -N -T -R 9222:127.0.0.1:9222 <user>@<devbox-host>` |
 | Filter-proxy | devbox | 9229 (HTTP), 9228 (WS) | Se under |
 | MCP-server | devbox | – | `--browser-url=http://127.0.0.1:9229` i `~/.claude.json`, startet via `chrome-mcp-supervisor.sh` |
 
@@ -49,7 +49,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now cdp-devtools-filter-proxy.service
 
 # valgfritt: start uten innlogging etter reboot
-loginctl enable-linger jov
+loginctl enable-linger <user>
 ```
 
 Loggen ligger i `~/.local/state/cdp-proxy/proxy.log`.
@@ -62,10 +62,10 @@ curl -s http://127.0.0.1:9222/json/version | head -3
 ps -axo args= | grep -- '-R 9222'
 
 # 2) devbox: tunnelen kommer frem, og proxyen lytter
-ssh jov@devbox-jov-ne 'curl -s -m5 http://127.0.0.1:9222/json/version | head -3; ss -ltn | grep -E ":(9222|9228|9229)\b"'
+ssh <user>@<devbox-host> 'curl -s -m5 http://127.0.0.1:9222/json/version | head -3; ss -ltn | grep -E ":(9222|9228|9229)\b"'
 
 # 3) devbox: proxyen svarer, og tjenesten er oppe
-ssh jov@devbox-jov-ne 'curl -s -m5 -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9229/json/version; systemctl --user is-active cdp-devtools-filter-proxy'
+ssh <user>@<devbox-host> 'curl -s -m5 -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9229/json/version; systemctl --user is-active cdp-devtools-filter-proxy'
 ```
 
 Å sjekke bare 9222 sier ingenting om MCP-en virker.
