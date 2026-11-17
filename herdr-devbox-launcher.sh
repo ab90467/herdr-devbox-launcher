@@ -1,5 +1,7 @@
 #!/bin/zsh
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
+# Dock-launched Ghostty may have no UTF-8 locale; ${#str} below must count chars, not bytes.
+export LC_CTYPE=en_US.UTF-8
 DEVBOX="devbox-jov-ne"
 SESSION="devbox"
 
@@ -17,41 +19,108 @@ C_P=$'\033[38;2;207;2;43m'
 C_R=$'\033[38;2;225;60;20m'
 C_A=$'\033[38;2;240;125;0m'
 
-splash() {
-  local cols pad_art pad_status status_text
-  cols=$(tput cols 2>/dev/null || echo 80)
+# All status output goes into a framed box, centered on screen. Lines are
+# collected in LN_STYLE/LN_TEXT and the whole screen is redrawn on each change;
+# when there are more lines than fit, the oldest scroll out of the box.
+LN_STYLE=()
+LN_TEXT=()
+LAST_SIZE=""
 
+render() {
+  local size rows cols width inner_h total top left art_left buf="" sp fill
+  local k idx n start style text pre pv avail
+
+  size=$(stty size 2>/dev/null)
+  rows=${size% *}; cols=${size#* }
+  [[ "$rows" == <-> && "$cols" == <-> ]] || { rows=24; cols=80 }
+
+  width=$(( cols - 4 ));       (( width > 70 )) && width=70;       (( width < 30 )) && width=30
+  inner_h=$(( rows - 10 ));    (( inner_h > 18 )) && inner_h=18;   (( inner_h < 6 )) && inner_h=6
+  total=$(( 7 + inner_h + 2 ))  # blank + 5 logo rows + blank + box
+  top=$(( (rows - total) / 2 + 1 ));  (( top < 1 )) && top=1
+  left=$(( (cols - width) / 2 + 1 )); (( left < 1 )) && left=1
   # art is 5 letters * 5 cols + 4 separating spaces = 29 chars wide.
-  pad_art=$(( (cols - 29) / 2 ))
-  (( pad_art < 0 )) && pad_art=0
-  printf -v PAD_ART '%*s' "$pad_art" ""
+  art_left=$(( (cols - 29) / 2 + 1 )); (( art_left < 1 )) && art_left=1
 
-  status_text="⚡ kobler til ${DEVBOX} …"
-  pad_status=$(( (cols - ${#status_text}) / 2 ))
-  (( pad_status < 0 )) && pad_status=0
-  printf -v PAD_STATUS '%*s' "$pad_status" ""
+  if [[ "$rows x $cols" != "$LAST_SIZE" ]]; then
+    buf+=$'\033[2J'
+    LAST_SIZE="$rows x $cols"
+  fi
 
-  echo ""
-  echo "${PAD_ART}${C_S} ████${C_RESET} ${C_O} ███ ${C_RESET} ${C_P}████ ${C_RESET} ${C_R}████ ${C_RESET} ${C_A} ███ ${C_RESET}"
-  echo "${PAD_ART}${C_S}█    ${C_RESET} ${C_O}█   █${C_RESET} ${C_P}█   █${C_RESET} ${C_R}█   █${C_RESET} ${C_A}█   █${C_RESET}"
-  echo "${PAD_ART}${C_S} ███ ${C_RESET} ${C_O}█   █${C_RESET} ${C_P}████ ${C_RESET} ${C_R}████ ${C_RESET} ${C_A}█████${C_RESET}"
-  echo "${PAD_ART}${C_S}    █${C_RESET} ${C_O}█   █${C_RESET} ${C_P}█    ${C_RESET} ${C_R}█  █ ${C_RESET} ${C_A}█   █${C_RESET}"
-  echo "${PAD_ART}${C_S}████ ${C_RESET} ${C_O} ███ ${C_RESET} ${C_P}█    ${C_RESET} ${C_R}█   █${C_RESET} ${C_A}█   █${C_RESET}"
-  echo ""
-  echo "${PAD_STATUS}${C_DIM}⚡ kobler til${C_RESET} ${C_BOLD}${DEVBOX}${C_RESET}${C_DIM} …${C_RESET}"
-  echo ""
+  local -a art=(
+    "${C_S} ████${C_RESET} ${C_O} ███ ${C_RESET} ${C_P}████ ${C_RESET} ${C_R}████ ${C_RESET} ${C_A} ███ ${C_RESET}"
+    "${C_S}█    ${C_RESET} ${C_O}█   █${C_RESET} ${C_P}█   █${C_RESET} ${C_R}█   █${C_RESET} ${C_A}█   █${C_RESET}"
+    "${C_S} ███ ${C_RESET} ${C_O}█   █${C_RESET} ${C_P}████ ${C_RESET} ${C_R}████ ${C_RESET} ${C_A}█████${C_RESET}"
+    "${C_S}    █${C_RESET} ${C_O}█   █${C_RESET} ${C_P}█    ${C_RESET} ${C_R}█  █ ${C_RESET} ${C_A}█   █${C_RESET}"
+    "${C_S}████ ${C_RESET} ${C_O} ███ ${C_RESET} ${C_P}█    ${C_RESET} ${C_R}█   █${C_RESET} ${C_A}█   █${C_RESET}"
+  )
+  for (( k = 1; k <= 5; k++ )); do
+    printf -v sp '\033[%d;%dH' $(( top + k )) "$art_left"
+    buf+="${sp}${art[k]}"
+  done
+
+  # top border with title
+  local title="kobler til ${DEVBOX}"
+  printf -v fill '%*s' $(( width - 5 - ${#title} )) ""
+  printf -v sp '\033[%d;%dH' $(( top + 7 )) "$left"
+  buf+="${sp}${C_O}╭─${C_RESET} ${C_BOLD}${title}${C_RESET} ${C_O}${fill// /─}╮${C_RESET}"
+
+  # content rows
+  n=${#LN_TEXT}
+  start=$(( n > inner_h ? n - inner_h + 1 : 1 ))
+  for (( k = 0; k < inner_h; k++ )); do
+    idx=$(( start + k ))
+    text=""; pre=""; pv=0
+    if (( idx <= n )); then
+      style=${LN_STYLE[idx]}; text=${LN_TEXT[idx]}
+      case "$style" in
+        step) pre="${C_CYAN}${C_BOLD}▸ ";            pv=2 ;;
+        ok)   pre="  ${C_GREEN}✓${C_RESET} ";         pv=4 ;;
+        bad)  pre="  ${C_RED}✗${C_RESET} ";           pv=4 ;;
+        info) pre="  ${C_DIM}·${C_RESET} ";           pv=4 ;;
+        raw)  pre="  ${C_DIM}";                      pv=2 ;;
+        go)   pre="${C_GREEN}${C_BOLD}→ ";           pv=2 ;;
+        ask)  pre="${C_BOLD}";                       pv=0 ;;
+      esac
+    fi
+    avail=$(( width - 4 - pv ))
+    (( ${#text} > avail )) && text="${text[1,avail-1]}…"
+    printf -v fill '%*s' $(( avail - ${#text} )) ""
+    printf -v sp '\033[%d;%dH' $(( top + 8 + k )) "$left"
+    buf+="${sp}${C_O}│${C_RESET} ${pre}${text}${C_RESET}${fill} ${C_O}│${C_RESET}"
+  done
+
+  # bottom border
+  printf -v fill '%*s' $(( width - 2 )) ""
+  printf -v sp '\033[%d;%dH' $(( top + 8 + inner_h )) "$left"
+  buf+="${sp}${C_O}╰${fill// /─}╯${C_RESET}"
+
+  printf '%s' "$buf"
 }
 
-ok()   { echo "  ${C_GREEN}✓${C_RESET} $1" }
-bad()  { echo "  ${C_RED}✗${C_RESET} $1" }
-info() { echo "  ${C_DIM}·${C_RESET} $1" }
-step() { echo "${C_CYAN}${C_BOLD}▸ $1${C_RESET}" }
+add_line() { LN_STYLE+=("$1"); LN_TEXT+=("$2") }
+ok()   { add_line ok "$1";   render }
+bad()  { add_line bad "$1";  render }
+info() { add_line info "$1"; render }
+step() { add_line step "$1"; render }
+go()   { add_line go "$1";   render }
+# dump <title> <text> [max-lines]: command output as dim lines (last N lines).
+dump() {
+  local l
+  add_line raw "--- $1 ---"
+  while IFS= read -r l; do
+    add_line raw "${l//$'\t'/ }"
+  done <<< "$(print -r -- "$2" | tail -n "${3:-6}")"
+  render
+}
+
 fail_and_exit() {
   stty sane 2>/dev/null
-  printf '\033[?1000l\033[?1003l\033[?25h' 2>/dev/null
-  echo ""
-  read -k 1 "?Press 'r' to retry, or any other key to close..."
-  echo ""
+  printf '\033[?1000l\033[?1003l' 2>/dev/null
+  add_line ask "Press 'r' to retry, or any other key to close..."
+  render
+  read -k 1 -s
+  printf '\033[?25h'
   if [[ "$REPLY" == [rR] ]]; then
     continue
   fi
@@ -59,8 +128,10 @@ fail_and_exit() {
 }
 
 while true; do
+LN_STYLE=(); LN_TEXT=(); LAST_SIZE=""
+printf '\033[?25l'
 clear
-splash
+render
 
 step "tailscale"
 if ! command -v tailscale >/dev/null 2>&1; then
@@ -72,13 +143,10 @@ ok "installert"
 TS_STATE=$(tailscale status --json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('BackendState',''))" 2>/dev/null)
 if [[ "$TS_STATE" != "Running" ]]; then
   bad "ikke oppe (status: ${TS_STATE:-ukjent}) — kjør: tailscale up"
-  echo ""
-  echo "${C_DIM}--- tailscale status ---${C_RESET}"
-  tailscale status 2>&1
+  dump "tailscale status" "$(tailscale status 2>&1)" 6
   fail_and_exit
 fi
 ok "oppe og kjører"
-echo ""
 
 step "$DEVBOX"
 PING_FILE=$(mktemp)
@@ -94,7 +162,6 @@ rm -f "$PING_FILE"
 
 if (( PING_OK )); then
   ok "svarer"
-  echo ""
 
   step "herdr"
   if ! command -v herdr >/dev/null 2>&1; then
@@ -103,9 +170,7 @@ if (( PING_OK )); then
       ok "installert ($(herdr --version 2>&1 | awk '{print $2}'))"
     else
       bad "installasjon feilet"
-      echo ""
-      echo "${C_DIM}--- brew install herdr ---${C_RESET}"
-      echo "$BREW_OUT"
+      dump "brew install herdr" "$BREW_OUT" 6
       fail_and_exit
     fi
   else
@@ -130,15 +195,12 @@ if (( PING_OK )); then
       ok "oppgradert til $(herdr --version 2>&1 | awk '{print $2}')"
     else
       bad "oppgradering feilet"
-      echo ""
-      echo "${C_DIM}--- brew upgrade herdr ---${C_RESET}"
-      echo "$BREW_OUT"
+      dump "brew upgrade herdr" "$BREW_OUT" 6
       fail_and_exit
     fi
   else
     ok "siste versjon ($(herdr --version 2>&1 | awk '{print $2}'))"
   fi
-  echo ""
 
   step "Claude Tools"
   if pgrep -f "Claude Tools.app/Contents/MacOS/ClaudeTools" >/dev/null 2>&1; then
@@ -153,7 +215,6 @@ if (( PING_OK )); then
       bad "fikk ikke startet — åpne ~/Applications/Claude Tools.app manuelt"
     fi
   fi
-  echo ""
 
   step "dev-prosesser"
   DEV_PROC_OUT=$(ssh -o ConnectTimeout=5 "$DEVBOX" python3 - < "$HOME/.local/bin/herdr-restart-stale-dev.py" 2>&1)
@@ -170,7 +231,6 @@ if (( PING_OK )); then
       esac
     done <<< "$DEV_PROC_OUT"
   fi
-  echo ""
 
   # Hold Macen våken (idle-søvn) mens dette vinduet er åpent, maks 9 t: Chrome-
   # broen og SSH-tunnelene dør når Macen sover. -w følger denne prosessen, så
@@ -183,14 +243,15 @@ if (( PING_OK )); then
     CAFFEINATE_PID=$!
   fi
   ok "Mac holdes våken i opptil 9 t mens dette vinduet er åpent"
-  echo ""
 
-  echo "${C_GREEN}${C_BOLD}→ Kobler til (sesjon: ${SESSION})...${C_RESET}"
+  go "Kobler til (sesjon: ${SESSION})..."
   sleep 0.3
+  printf '\033[?25h'
   herdr --remote "$DEVBOX" --session "$SESSION" --remote-keybindings server --handoff
   HERDR_STATUS=$?
   if (( HERDR_STATUS != 0 )); then
-    echo ""
+    printf '\033[?25l'
+    LAST_SIZE=""
     bad "herdr avsluttet med feil (kode $HERDR_STATUS)"
     fail_and_exit
   fi
@@ -198,11 +259,6 @@ if (( PING_OK )); then
 fi
 
 bad "svarer ikke på ping (5s timeout)"
-echo ""
-echo "${C_DIM}--- tailscale status (debug) ---${C_RESET}"
-tailscale status 2>&1
-echo ""
-echo "${C_DIM}--- $DEVBOX ---${C_RESET}"
-tailscale status 2>&1 | grep "$DEVBOX"
+dump "$DEVBOX" "$(tailscale status 2>&1 | grep "$DEVBOX" || echo 'ikke i tailscale status')" 2
 fail_and_exit
 done
