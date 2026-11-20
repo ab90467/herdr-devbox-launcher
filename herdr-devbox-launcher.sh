@@ -239,17 +239,29 @@ if (( PING_OK )); then
     done <<< "$DEV_PROC_OUT"
   fi
 
-  # Hold Macen våken (idle-søvn) mens dette vinduet er åpent, maks 24 t: Chrome-
-  # broen og SSH-tunnelene dør når Macen sover. -w følger denne prosessen, så
-  # sperren forsvinner av seg selv når launcheren avslutter; -t er et tak så
-  # Macen ikke holdes våken i dagevis av et glemt vindu. Lokk lukket sover den
-  # uansett. CAFFEINATE_PID hindrer at retry-løkken starter flere.
+  # Hold Macen våken (idle-søvn) så lenge du er aktiv, og IDLE_LIMIT sekunder
+  # etter siste tastetrykk/musbevegelse: Chrome-broen og SSH-tunnelene dør når
+  # Macen sover. Hvert minutt leses HIDIdleTime (gjelder hele Macen, ikke bare
+  # dette vinduet); under grensen fornyes caffeinate (-t 70), over grensen lar
+  # vi Macen sove. Løkken og caffeinate (-w) avsluttes når launcheren gjør det.
+  # Lokk lukket sover den uansett. CAFFEINATE_PID hindrer at retry-løkken
+  # starter flere. Kan ikke idle-tiden leses, regnes den som 0 (holdes våken).
   step "mac-søvn"
   if [[ -z "${CAFFEINATE_PID:-}" ]]; then
-    caffeinate -i -t 86400 -w $$ &!
+    IDLE_LIMIT=${IDLE_LIMIT:-7200}
+    (
+      while kill -0 $$ 2>/dev/null; do
+        idle=$(ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')
+        if (( ${idle:-0} < IDLE_LIMIT )); then
+          caffeinate -i -t 70 -w $$
+        else
+          sleep 60
+        fi
+      done
+    ) &!
     CAFFEINATE_PID=$!
   fi
-  ok "Mac holdes våken i opptil 24 t mens dette vinduet er åpent"
+  ok "Mac holdes våken mens du er aktiv, og $(( IDLE_LIMIT / 3600 )) t etter siste tastetrykk"
 
   go "Kobler til (sesjon: ${SESSION})..."
   sleep 0.3
