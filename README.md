@@ -23,15 +23,21 @@ Double-clicking **Herdr Devbox.app** opens a Ghostty window running
    set explicitly) it is *currently* forwarding to, read from its running
    `kubectl port-forward` children — not from kubeconfig — so `aam` vs
    `aambrann` survives a restart. If that can't be read, it is not restarted.
-6. Keeps the Mac awake with `caffeinate -i -t 32400 -w $$` (idle sleep only,
-   max 9h, released as soon as the launcher/window exits). The SSH tunnels and
+6. Keeps the Mac awake with `caffeinate -i -t 86400 -w $$` (idle sleep only,
+   max 24h, released as soon as the launcher/window exits). The SSH tunnels and
    the Chrome bridge die when the Mac sleeps; locking the screen is fine, a
    closed lid still sleeps it.
 7. Attaches: `herdr --remote <devbox> --session <session>`.
 
+All status output (logo plus the check lines above) is drawn in a bordered
+box centered on screen, redrawn on every update and on resize. The box has a
+fixed height; if there are more lines than fit, the oldest scroll out. Debug
+output from a failed step (tailscale/brew) is shown inside the box too.
+
 On any failure it prints what went wrong and offers `r` to retry (loops
 back to step 1) or any other key to close — no `exec`/process replacement,
-just a plain loop, so it can't confuse the terminal's process tracking.
+just a plain loop, so it can't confuse the terminal's process tracking. The
+prompt is centered inside the box with blank lines around it.
 
 ## Related: Chrome bridge
 
@@ -71,6 +77,13 @@ reproducible from source in this repo — no compiled artifact to lose track
 of.
 
 ## Troubleshooting
+
+**Edited the script but the window still shows the old behaviour/text** — a
+running launcher keeps the script it was started with. Close the Herdr Devbox
+window and open it again. This also matters for `caffeinate`: its 24h cap
+counts from window start, so a window left open longer no longer keeps the
+Mac awake (observed 2026-11-19/20: a 25h-old window, Mac slept, Chrome bridge
+dropped).
 
 **Splash hangs right after "herdr installert (...)"** — this is the
 `brew outdated herdr` network call stalling, not a script bug. Close the
