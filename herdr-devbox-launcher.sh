@@ -28,7 +28,7 @@ LAST_SIZE=""
 
 render() {
   local size rows cols width inner_h total top left art_left buf="" sp fill
-  local k idx n start style text pre pv avail
+  local k idx n start style text pre pv avail lead
 
   size=$(stty size 2>/dev/null)
   rows=${size% *}; cols=${size#* }
@@ -80,8 +80,13 @@ render() {
         info) pre="  ${C_DIM}·${C_RESET} ";           pv=4 ;;
         raw)  pre="  ${C_DIM}";                      pv=2 ;;
         go)   pre="${C_GREEN}${C_BOLD}→ ";           pv=2 ;;
-        ask)  pre="${C_BOLD}";                       pv=0 ;;
+        ask)  pre="${C_BOLD}${C_A}» ";               pv=2 ;;
       esac
+      if [[ "$style" == ask ]]; then  # centered, so it stands out from the status lines
+        lead=$(( (width - 4 - pv - ${#text}) / 2 )); (( lead < 0 )) && lead=0
+        printf -v sp '%*s' "$lead" ""
+        pre="${sp}${pre}"; pv=$(( pv + lead ))
+      fi
     fi
     avail=$(( width - 4 - pv ))
     (( ${#text} > avail )) && text="${text[1,avail-1]}…"
@@ -117,7 +122,9 @@ dump() {
 fail_and_exit() {
   stty sane 2>/dev/null
   printf '\033[?1000l\033[?1003l' 2>/dev/null
+  add_line "" ""
   add_line ask "Press 'r' to retry, or any other key to close..."
+  add_line "" ""
   render
   read -k 1 -s
   printf '\033[?25h'
@@ -232,17 +239,17 @@ if (( PING_OK )); then
     done <<< "$DEV_PROC_OUT"
   fi
 
-  # Hold Macen våken (idle-søvn) mens dette vinduet er åpent, maks 9 t: Chrome-
+  # Hold Macen våken (idle-søvn) mens dette vinduet er åpent, maks 24 t: Chrome-
   # broen og SSH-tunnelene dør når Macen sover. -w følger denne prosessen, så
   # sperren forsvinner av seg selv når launcheren avslutter; -t er et tak så
   # Macen ikke holdes våken i dagevis av et glemt vindu. Lokk lukket sover den
   # uansett. CAFFEINATE_PID hindrer at retry-løkken starter flere.
   step "mac-søvn"
   if [[ -z "${CAFFEINATE_PID:-}" ]]; then
-    caffeinate -i -t 32400 -w $$ &!
+    caffeinate -i -t 86400 -w $$ &!
     CAFFEINATE_PID=$!
   fi
-  ok "Mac holdes våken i opptil 9 t mens dette vinduet er åpent"
+  ok "Mac holdes våken i opptil 24 t mens dette vinduet er åpent"
 
   go "Kobler til (sesjon: ${SESSION})..."
   sleep 0.3
